@@ -1,4 +1,8 @@
 import sqlite3
+import os
+
+if os.path.exists("db/nifty100.db"):
+    os.remove("db/nifty100.db")
 
 conn = sqlite3.connect("db/nifty100.db")
 
