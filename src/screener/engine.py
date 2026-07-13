@@ -198,15 +198,19 @@ class ScreenerEngine:
 
         metrics = [
 
-            "return_on_equity_pct",
+    "return_on_equity_pct",
 
-            "net_profit_margin_pct",
+    "net_profit_margin_pct",
 
-            "operating_profit_margin_pct",
+    "operating_profit_margin_pct",
 
-            "asset_turnover"
+    "asset_turnover",
 
-        ]
+    "free_cash_flow_cr",
+
+    "interest_coverage"
+
+]
 
         score_columns = []
 
@@ -228,7 +232,16 @@ class ScreenerEngine:
                 )
 
                 if maximum > minimum:
+                    # Extreme values ko cap karo
 
+lower = df[metric].quantile(0.10)
+
+upper = df[metric].quantile(0.90)
+
+df[metric] = df[metric].clip(
+    lower=lower,
+    upper=upper
+)
                     df[
                         score_col
                     ] = (
