@@ -7,12 +7,12 @@ class ScreenerEngine:
 
     def __init__(self):
 
-        # Connect SQLite
+        # Connect database
         self.conn = sqlite3.connect(
             "db/nifty100.db"
         )
 
-        # Load financial ratios
+        # Load data
         self.df = pd.read_sql(
             """
             SELECT
@@ -31,11 +31,17 @@ class ScreenerEngine:
             "r"
         ) as file:
 
-            self.config = yaml.safe_load(file)
+            self.config = yaml.safe_load(
+                file
+            )
+
+    # ---------------------------------
 
     def get_data(self):
 
         return self.df.copy()
+
+    # ---------------------------------
 
     def get_preset(
         self,
@@ -48,9 +54,10 @@ class ScreenerEngine:
                 f"Preset '{preset_name}' not found."
             )
 
-        return self.config[preset_name]
-            # ---------------------------------
-    # Apply Preset Filters
+        return self.config[
+            preset_name
+        ]
+
     # ---------------------------------
 
     def apply_filters(
@@ -66,90 +73,139 @@ class ScreenerEngine:
 
         for rule, threshold in filters.items():
 
-            # -----------------------------
-            # Minimum Filters
-            # -----------------------------
+            print(
+                f"Applying filter: "
+                f"{rule} = {threshold}"
+            )
 
-            if rule.endswith("_min"):
+            # -------------------------
+            # Minimum filters
+            # -------------------------
+
+            if rule.endswith(
+                "_min"
+            ):
 
                 column = rule.replace(
                     "_min",
                     ""
                 )
 
-                if column in df.columns:
+                if column not in df.columns:
 
-                    if column == "interest_coverage":
+                    print(
+                        f"Skipping filter: "
+                        f"{column}"
+                    )
 
-                        # Debt Free behaves as infinity
-                        df = df[
-                            (df[column] >= threshold)
-                            |
-                            (df[column].isna())
-                        ]
+                    continue
 
-                    else:
+                # Interest coverage special case
 
-                        df = df[
-                            df[column] >= threshold
-                        ]
+                if column == "interest_coverage":
 
-            # -----------------------------
-            # Maximum Filters
-            # -----------------------------
+                    df = df[
+                        (
+                            df[column]
+                            >= threshold
+                        )
+                        |
+                        (
+                            df[column]
+                            .isna()
+                        )
+                    ]
 
-            elif rule.endswith("_max"):
+                else:
+
+                    df = df[
+                        df[column]
+                        >= threshold
+                    ]
+
+            # -------------------------
+            # Maximum filters
+            # -------------------------
+
+            elif rule.endswith(
+                "_max"
+            ):
 
                 column = rule.replace(
                     "_max",
                     ""
                 )
 
-                if column in df.columns:
+                if column not in df.columns:
 
-                    # D/E exception
-                    if column == "debt_to_equity":
+                    print(
+                        f"Skipping filter: "
+                        f"{column}"
+                    )
 
-                        financial = df[
-                            df["broad_sector"] == "Financials"
+                    continue
+
+                # D/E special case
+
+                if column == "debt_to_equity":
+
+                    financial = df[
+                        df[
+                            "broad_sector"
                         ]
+                        == "Financials"
+                    ]
 
-                        non_financial = df[
-                            df["broad_sector"] != "Financials"
+                    non_financial = df[
+                        df[
+                            "broad_sector"
                         ]
+                        != "Financials"
+                    ]
 
-                        non_financial = non_financial[
-                            non_financial[column] <= threshold
+                    non_financial = non_financial[
+                        non_financial[
+                            column
                         ]
+                        <= threshold
+                    ]
 
-                        df = pd.concat(
-                            [
-                                financial,
-                                non_financial
-                            ],
-                            ignore_index=True
-                        )
+                    df = pd.concat(
+                        [
+                            financial,
+                            non_financial
+                        ],
+                        ignore_index=True
+                    )
 
-                    else:
+                else:
 
-                        df = df[
-                            df[column] <= threshold
-                        ]
+                    df = df[
+                        df[column]
+                        <= threshold
+                    ]
 
         return df
-    # ---------------------------------
-    # Composite Quality Score
+
     # ---------------------------------
 
-    def calculate_composite_score(self, df):
+    def calculate_composite_score(
+        self,
+        df
+    ):
 
         df = df.copy()
 
         metrics = [
+
             "return_on_equity_pct",
+
             "net_profit_margin_pct",
+
             "operating_profit_margin_pct",
+
             "asset_turnover"
+
         ]
 
         score_columns = []
@@ -158,42 +214,83 @@ class ScreenerEngine:
 
             if metric in df.columns:
 
-                minimum = df[metric].min()
-                maximum = df[metric].max()
+                minimum = df[
+                    metric
+                ].min()
+
+                maximum = df[
+                    metric
+                ].max()
+
+                score_col = (
+                    metric
+                    + "_score"
+                )
 
                 if maximum > minimum:
 
-                    score_col = metric + "_score"
+                    df[
+                        score_col
+                    ] = (
 
-                    df[score_col] = (
                         (
-                            df[metric] - minimum
+
+                            df[
+                                metric
+                            ]
+
+                            - minimum
+
                         )
+
                         /
+
                         (
-                            maximum - minimum
+
+                            maximum
+
+                            - minimum
+
                         )
+
                     ) * 100
 
                 else:
 
-                    score_col = metric + "_score"
+                    df[
+                        score_col
+                    ] = 50
 
-                    df[score_col] = 50
+                score_columns.append(
+                    score_col
+                )
 
-                score_columns.append(score_col)
+        if score_columns:
 
-        df["composite_quality_score"] = (
-            df[score_columns]
-            .mean(axis=1)
-            .round(2)
-        )
+            df[
+                "composite_quality_score"
+            ] = (
+
+                df[
+                    score_columns
+                ]
+
+                .mean(
+                    axis=1
+                )
+
+                .round(2)
+
+            )
+
+        else:
+
+            df[
+                "composite_quality_score"
+            ] = 0
 
         return df
 
-
-    # ---------------------------------
-    # Custom Filter
     # ---------------------------------
 
     def custom_filter(
@@ -205,7 +302,9 @@ class ScreenerEngine:
 
         for rule, threshold in custom_rules.items():
 
-            if rule.endswith("_min"):
+            if rule.endswith(
+                "_min"
+            ):
 
                 column = rule.replace(
                     "_min",
@@ -215,10 +314,13 @@ class ScreenerEngine:
                 if column in df.columns:
 
                     df = df[
-                        df[column] >= threshold
+                        df[column]
+                        >= threshold
                     ]
 
-            elif rule.endswith("_max"):
+            elif rule.endswith(
+                "_max"
+            ):
 
                 column = rule.replace(
                     "_max",
@@ -228,19 +330,23 @@ class ScreenerEngine:
                 if column in df.columns:
 
                     df = df[
-                        df[column] <= threshold
+                        df[column]
+                        <= threshold
                     ]
 
-        df = self.calculate_composite_score(df)
-
-        return df.sort_values(
-            "composite_quality_score",
-            ascending=False
+        df = self.calculate_composite_score(
+            df
         )
 
+        return df.sort_values(
 
-    # ---------------------------------
-    # Close DB
+            by=
+            "composite_quality_score",
+
+            ascending=False
+
+        )
+
     # ---------------------------------
 
     def close(self):
@@ -249,41 +355,76 @@ class ScreenerEngine:
 
 
 # ---------------------------------
-# Main
-# ---------------------------------
 
 if __name__ == "__main__":
 
     engine = ScreenerEngine()
 
-    print("Rows Loaded :", len(engine.df))
+    print(
 
-    print("\nAvailable Presets:")
+        "Rows Loaded:",
 
-    for preset in engine.config:
+        len(
+            engine.df
+        )
 
-        print("-", preset)
-
-    print("\nRunning Quality Compounder...\n")
-
-    result = engine.apply_filters(
-        "quality_compounder"
-    )
-
-    result = engine.calculate_composite_score(
-        result
     )
 
     print(
-        result[
-            [
-                "company_id",
-                "return_on_equity_pct",
-                "composite_quality_score"
-            ]
-        ].head(10)
+
+        "\nAvailable Presets:\n"
+
     )
 
-    print("\nCompanies Returned :", len(result))
+    for preset in engine.config:
+
+        print(
+            "-",
+            preset
+        )
+
+    print(
+        "\nRunning "
+        "Quality Compounder\n"
+    )
+
+    result = engine.apply_filters(
+
+        "quality_compounder"
+
+    )
+
+    result = engine.calculate_composite_score(
+
+        result
+
+    )
+
+    print(
+
+        result[
+            [
+
+                "company_id",
+
+                "return_on_equity_pct",
+
+                "composite_quality_score"
+
+            ]
+
+        ].head(10)
+
+    )
+
+    print(
+
+        "\nCompanies Returned:",
+
+        len(
+            result
+        )
+
+    )
 
     engine.close()

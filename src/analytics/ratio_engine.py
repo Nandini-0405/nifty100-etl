@@ -13,14 +13,67 @@ from src.analytics.ratios import (
 from src.analytics.cashflow_kpis import free_cash_flow
 
 
+# -----------------------------
+# Database Connection
+# -----------------------------
+
 conn = sqlite3.connect("db/nifty100.db")
 
-# Read tables
-pl = pd.read_sql("SELECT * FROM profitandloss", conn)
-bs = pd.read_sql("SELECT * FROM balancesheet", conn)
-cf = pd.read_sql("SELECT * FROM cashflow", conn)
 
-# Merge tables
+# -----------------------------
+# Load Tables
+# -----------------------------
+
+pl = pd.read_sql(
+    "SELECT * FROM profitandloss",
+    conn
+)
+
+bs = pd.read_sql(
+    "SELECT * FROM balancesheet",
+    conn
+)
+
+cf = pd.read_sql(
+    "SELECT * FROM cashflow",
+    conn
+)
+
+mc = pd.read_sql(
+    "SELECT * FROM market_cap",
+    conn
+)
+
+
+# -----------------------------
+# Fix Year Columns
+# -----------------------------
+
+pl["year"] = (
+    pl["year"]
+    .astype(str)
+    .str.extract(r"(\d{4})")[0]
+)
+
+bs["year"] = (
+    bs["year"]
+    .astype(str)
+    .str.extract(r"(\d{4})")[0]
+)
+
+cf["year"] = (
+    cf["year"]
+    .astype(str)
+    .str.extract(r"(\d{4})")[0]
+)
+
+mc["year"] = mc["year"].astype(str)
+
+
+# -----------------------------
+# Merge Tables
+# -----------------------------
+
 df = pl.merge(
     bs,
     on=["company_id", "year"],
@@ -32,9 +85,22 @@ df = df.merge(
     on=["company_id", "year"]
 )
 
-# KPI Calculations
+df = df.merge(
+    mc,
+    on=["company_id", "year"],
+    suffixes=("", "_mc")
+)
+
+
+# -----------------------------
+# Compute Ratios
+# -----------------------------
+
 df["net_profit_margin_pct"] = df.apply(
-    lambda x: net_profit_margin(x["net_profit"], x["sales"]),
+    lambda x: net_profit_margin(
+        x["net_profit"],
+        x["sales"]
+    ),
     axis=1
 )
 
@@ -89,7 +155,32 @@ df["free_cash_flow_cr"] = df.apply(
     axis=1
 )
 
-# Replace financial_ratios table
+
+# -----------------------------
+# Extra Metrics
+# -----------------------------
+
+df["dividend_payout_ratio_pct"] = df[
+    "dividend_payout"
+]
+
+df["pe_ratio"] = df[
+    "pe_ratio"
+]
+
+df["pb_ratio"] = df[
+    "pb_ratio"
+]
+
+df["dividend_yield_pct"] = df[
+    "dividend_yield_pct"
+]
+
+
+# -----------------------------
+# Save to Database
+# -----------------------------
+
 df.to_sql(
     "financial_ratios",
     conn,
@@ -97,6 +188,19 @@ df.to_sql(
     index=False
 )
 
-print("financial_ratios table populated successfully!")
+print("\nfinancial_ratios updated successfully!")
+
+print(
+    "Rows inserted:",
+    len(df)
+)
+
+print(
+    "\nColumns:"
+)
+
+print(
+    df.columns.tolist()
+)
 
 conn.close()
