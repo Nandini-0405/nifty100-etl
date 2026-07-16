@@ -271,3 +271,34 @@ def get_peer_data():
     conn.close()
 
     return df
+
+# -----------------------------------
+# Sector Analysis
+# -----------------------------------
+
+@st.cache_data(ttl=600)
+def get_sector_analysis():
+
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+    SELECT
+        fr.company_id,
+        s.broad_sector,
+        fr.sales,
+        fr.return_on_equity_pct,
+        mc.market_cap_crore
+    FROM financial_ratios fr
+
+    LEFT JOIN sectors s
+    ON fr.company_id = s.company_id
+
+    LEFT JOIN market_cap mc
+    ON fr.company_id = mc.company_id
+    """
+
+    df = pd.read_sql(query, conn)
+
+    conn.close()
+
+    return df
