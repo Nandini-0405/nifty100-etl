@@ -2,26 +2,34 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-
 DB_PATH = "db/nifty100.db"
 
+
+# -----------------------------------
+# Companies
+# -----------------------------------
 
 @st.cache_data(ttl=600)
 def get_companies():
 
     conn = sqlite3.connect(DB_PATH)
 
-    query = """
-    SELECT *
-    FROM companies
-    """
-
-    df = pd.read_sql(query, conn)
+    df = pd.read_sql(
+        """
+        SELECT *
+        FROM companies
+        """,
+        conn
+    )
 
     conn.close()
 
     return df
 
+
+# -----------------------------------
+# Financial Ratios
+# -----------------------------------
 
 @st.cache_data(ttl=600)
 def get_ratios(ticker, year=None):
@@ -34,7 +42,7 @@ def get_ratios(ticker, year=None):
     WHERE company_id = '{ticker}'
     """
 
-    if year:
+    if year is not None:
 
         query += f" AND year = '{year}'"
 
@@ -44,6 +52,10 @@ def get_ratios(ticker, year=None):
 
     return df
 
+
+# -----------------------------------
+# Profit & Loss
+# -----------------------------------
 
 @st.cache_data(ttl=600)
 def get_pl(ticker):
@@ -64,6 +76,10 @@ def get_pl(ticker):
     return df
 
 
+# -----------------------------------
+# Balance Sheet
+# -----------------------------------
+
 @st.cache_data(ttl=600)
 def get_bs(ticker):
 
@@ -82,6 +98,10 @@ def get_bs(ticker):
 
     return df
 
+
+# -----------------------------------
+# Cash Flow
+# -----------------------------------
 
 @st.cache_data(ttl=600)
 def get_cf(ticker):
@@ -102,6 +122,10 @@ def get_cf(ticker):
     return df
 
 
+# -----------------------------------
+# Sectors
+# -----------------------------------
+
 @st.cache_data(ttl=600)
 def get_sectors():
 
@@ -119,6 +143,10 @@ def get_sectors():
 
     return df
 
+
+# -----------------------------------
+# Peer Groups
+# -----------------------------------
 
 @st.cache_data(ttl=600)
 def get_peers(group_name):
@@ -139,6 +167,10 @@ def get_peers(group_name):
     return df
 
 
+# -----------------------------------
+# Valuation
+# -----------------------------------
+
 @st.cache_data(ttl=600)
 def get_valuation(ticker):
 
@@ -158,6 +190,83 @@ def get_valuation(ticker):
     except:
 
         df = pd.DataFrame()
+
+    conn.close()
+
+    return df
+
+
+# -----------------------------------
+# Dashboard Data
+# -----------------------------------
+
+@st.cache_data(ttl=600)
+def get_dashboard_data():
+
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+    SELECT
+        fr.*,
+        s.broad_sector
+    FROM financial_ratios fr
+    LEFT JOIN sectors s
+    ON fr.company_id = s.company_id
+    """
+
+    df = pd.read_sql(query, conn)
+
+    conn.close()
+
+    return df
+
+
+# -----------------------------------
+# Screener Data
+# -----------------------------------
+
+@st.cache_data(ttl=600)
+def get_screener_data():
+
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+    SELECT
+        fr.*,
+        c.company_name,
+        s.broad_sector
+    FROM financial_ratios fr
+
+    LEFT JOIN companies c
+    ON fr.company_id = c.id
+
+    LEFT JOIN sectors s
+    ON fr.company_id = s.company_id
+    """
+
+    df = pd.read_sql(query, conn)
+
+    conn.close()
+
+    return df
+
+
+# -----------------------------------
+# Peer Data
+# -----------------------------------
+
+@st.cache_data(ttl=600)
+def get_peer_data():
+
+    conn = sqlite3.connect(DB_PATH)
+
+    df = pd.read_sql(
+        """
+        SELECT *
+        FROM peer_percentiles
+        """,
+        conn
+    )
 
     conn.close()
 
